@@ -110,4 +110,17 @@ public class Claw implements Renderable {
         }
         g2d.setTransform(old);
     }
+    public double getAngle() { return angle; }
+    public double getLength() { return length; }
+
+    // Add this getter
+    public Item getGrabbedItem() { return grabbedItem; }
+
+    // Replace the old setLoadState with this one:
+    public void setLoadState(double loadAngle, double loadLength, ClawState loadState, Item loadGrabbedItem) {
+        this.angle = loadAngle;
+        this.length = loadLength;
+        this.state = loadState;
+        this.grabbedItem = loadGrabbedItem; // Re-attaches the item!
+    }
 }

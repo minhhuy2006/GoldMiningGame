@@ -73,7 +73,8 @@ public class GamePanel extends JPanel implements ActionListener {
             if (e.getKeyCode() == KeyEvent.VK_SPACE) claw.shoot();
             if (e.getKeyCode() == KeyEvent.VK_ESCAPE) gameState = GameState.PAUSED;
             if (e.getKeyCode() == KeyEvent.VK_S) {
-                if (SaveManager.saveGame(currentLevel, score)) {
+                // CORRECTED: Uses the new Full-State Save method
+                if (SaveManager.saveGame(currentLevel, score, timeLeft, claw, items)) {
                     JOptionPane.showMessageDialog(this, "Game Saved!");
                 }
             }
@@ -87,46 +88,69 @@ public class GamePanel extends JPanel implements ActionListener {
         int my = e.getY();
 
         if (gameState == GameState.MENU) {
-            if (isHovering(mx, my, 300, 220, 200, 40)) { // New Game
-                currentLevel = 1; score = 0; startLevel(currentLevel); gameState = GameState.PLAYING;
+            // --- New Game Button ---
+            if (isHovering(mx, my, 300, 220, 200, 40)) {
+                currentLevel = 1;
+                score = 0;
+                startLevel(currentLevel);
+                gameState = GameState.PLAYING;
             }
-            if (isHovering(mx, my, 300, 280, 200, 40)) { // Load Game
-                int[] savedData = SaveManager.loadGame();
-                if (savedData != null) {
-                    currentLevel = savedData[0]; score = savedData[1]; startLevel(currentLevel); gameState = GameState.PLAYING;
-                } else JOptionPane.showMessageDialog(this, "No valid save found.");
-            }
-            if (isHovering(mx, my, 300, 340, 200, 40)) gameState = GameState.HIGHSCORES;
-            if (isHovering(mx, my, 300, 400, 200, 40)) gameState = GameState.TUTORIAL; // How to Play
 
-            // Exit Game Button
-            if (isHovering(mx, my, 300, 460, 200, 40)) {
-                System.exit(0);
+            // --- Load Game Button (CORRECTED) ---
+            if (isHovering(mx, my, 300, 280, 200, 40)) {
+                SaveManager.SaveData savedData = SaveManager.loadGame();
+                if (savedData != null) {
+                    // 1. Sync basic stats
+                    currentLevel = savedData.level;
+                    score = savedData.score;
+                    timeLeft = savedData.timeLeft;
+
+                    // 2. Clear and load the exact items from the save
+                    items.clear();
+                    items.addAll(savedData.items);
+
+                    // 3. Re-link the grabbed item if the claw was reeling something in
+                    Item grabbedItem = null;
+                    if (savedData.grabbedIndex != -1 && savedData.grabbedIndex < items.size()) {
+                        grabbedItem = items.get(savedData.grabbedIndex);
+                    }
+
+                    // 4. Update the claw state with ALL 4 required parameters
+                    claw.setLoadState(
+                            savedData.clawAngle,
+                            savedData.clawLength,
+                            ClawState.valueOf(savedData.clawState),
+                            grabbedItem
+                    );
+
+                    gameState = GameState.PLAYING;
+                } else {
+                    JOptionPane.showMessageDialog(this, "No valid save found.");
+                }
             }
+
+            if (isHovering(mx, my, 300, 340, 200, 40)) gameState = GameState.HIGHSCORES;
+            if (isHovering(mx, my, 300, 400, 200, 40)) gameState = GameState.TUTORIAL;
+            if (isHovering(mx, my, 300, 460, 200, 40)) System.exit(0);
         }
         else if (gameState == GameState.PLAYING) {
-            // Check Pause button
+            // Shoot the claw if we aren't clicking the pause button
             if (isHovering(mx, my, WIDTH - 120, 80, 100, 30)) {
                 gameState = GameState.PAUSED;
             } else {
-                claw.shoot(); // Click anywhere else to shoot
+                claw.shoot();
             }
         }
         else if (gameState == GameState.PAUSED) {
-            if (isHovering(mx, my, 300, 250, 200, 40)) gameState = GameState.PLAYING; // Resume
-            if (isHovering(mx, my, 300, 320, 200, 40)) gameState = GameState.MENU;    // Main Menu
+            if (isHovering(mx, my, 300, 250, 200, 40)) gameState = GameState.PLAYING;
+            if (isHovering(mx, my, 300, 320, 200, 40)) gameState = GameState.MENU;
         }
         else if (gameState == GameState.GAME_OVER || gameState == GameState.VICTORY) {
-            if (isHovering(mx, my, 300, 400, 200, 40)) gameState = GameState.MENU;    // Main Menu
+            if (isHovering(mx, my, 300, 400, 200, 40)) gameState = GameState.MENU;
         }
         else if (gameState == GameState.HIGHSCORES || gameState == GameState.TUTORIAL) {
-            if (isHovering(mx, my, 300, 500, 200, 40)) gameState = GameState.MENU;    // Back Button
+            if (isHovering(mx, my, 300, 500, 200, 40)) gameState = GameState.MENU;
         }
-    }
-
-    // THE MISSING METHOD: Checks if mouse coordinates are inside a box
-    private boolean isHovering(int mx, int my, int x, int y, int w, int h) {
-        return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
     // --- Game Logic ---
@@ -159,9 +183,9 @@ public class GamePanel extends JPanel implements ActionListener {
     public void actionPerformed(ActionEvent e) {
         if (gameState == GameState.PLAYING) {
             timeLeft -= 0.016f;
+
             claw.update(items, this);
 
-            // Skip level instantly if target met
             if (score >= targetScores[currentLevel - 1]) {
                 currentLevel++;
                 if (currentLevel > 10) {
@@ -246,7 +270,6 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     private void drawPaused(Graphics2D g2d) {
-        // Semi-transparent overlay
         g2d.setColor(new Color(0, 0, 0, 150));
         g2d.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -305,5 +328,8 @@ public class GamePanel extends JPanel implements ActionListener {
         }
 
         drawButton(g2d, "Back", 300, 500, 200, 40);
+    }
+    private boolean isHovering(int mx, int my, int x, int y, int w, int h) {
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 }
